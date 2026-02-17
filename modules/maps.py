@@ -202,7 +202,7 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
         }
 
     # Glob pattern to allow variant filenames
-    pattern = os.path.join(vectors_dir, f"{region_slug}*.shp")
+    pattern = os.path.join(vectors_dir, f"{region_slug}*.geojson")
     matches = glob.glob(pattern)
     if not matches:
         # No boundary found; return map unchanged

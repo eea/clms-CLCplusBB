@@ -170,7 +170,7 @@ def display_map_discrete(rasters_dir, chosen_region, base_map, layer_dict, class
 
 def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', style=None):
     """
-    Overlay a park boundary shapefile onto an existing Folium map.
+    Overlay a park boundary geojson onto an existing Folium map.
 
     Parameters
     ----------
@@ -211,10 +211,20 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
 
     try:
         gdf = gpd.read_file(matches[0])
+        print("GeoDataFrame loaded successfully")
+        print("GDF valid: ", gdf.is_valid.all())
+
+        print("GDF HEAD: ", gdf.head())
+        print("CRS:", gdf.crs)
+
         folium.GeoJson(gdf, style_function=style).add_to(map_object)
-    except Exception:
+
+    except Exception as e:
         # Fail silently if file unreadable
-        print("Error reading boundary file:", matches[0])
+        # print("Error reading boundary file:", matches[0])
+
+        import traceback
+        traceback.print_exc()
         pass
 
     return map_object

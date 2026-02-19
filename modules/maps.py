@@ -179,7 +179,7 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
     region_slug : str
         Slug form of the region name (spaces replaced by underscores).
     vectors_dir : str
-        Directory containing the boundary shapefiles.
+        Directory containing the boundary geojson files.
     style : dict or callable
         Optional style dict or folium style_function callable for GeoJson.
 
@@ -206,7 +206,7 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
     matches = glob.glob(pattern)
     if not matches:
         # No boundary found; return map unchanged
-        print(f"No boundary shapefile found for region slug '{region_slug}' in '{vectors_dir}'.")
+        print(f"No boundary file found for region slug '{region_slug}' in '{vectors_dir}'.")
         return map_object
 
     try:
@@ -214,7 +214,7 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
         folium.GeoJson(gdf, style_function=style).add_to(map_object)
     except Exception:
         # Fail silently if file unreadable
-        print("Error reading boundary shapefile:", matches[0])
+        print("Error reading boundary file:", matches[0])
         pass
 
     return map_object

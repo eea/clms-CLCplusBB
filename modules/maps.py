@@ -208,22 +208,14 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
         # No boundary found; return map unchanged
         print(f"No boundary file found for region slug '{region_slug}' in '{vectors_dir}'.")
         return map_object
-
     try:
         gdf = gpd.read_file(matches[0])
-        print("GeoDataFrame loaded successfully")
-        print("GDF valid: ", gdf.is_valid.all())
 
-        print("GDF HEAD: ", gdf.head())
-        print("CRS:", gdf.crs)
 
         # folium.GeoJson(gdf, style_function=style).add_to(map_object)
         folium.GeoJson(gdf[['geometry']], style_function=style).add_to(map_object)
-        
-    except Exception as e:
-        # Fail silently if file unreadable
-        # print("Error reading boundary file:", matches[0])
 
+    except Exception as e:
         import traceback
         traceback.print_exc()
 

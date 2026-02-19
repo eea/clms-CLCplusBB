@@ -217,8 +217,9 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
         print("GDF HEAD: ", gdf.head())
         print("CRS:", gdf.crs)
 
-        folium.GeoJson(gdf, style_function=style).add_to(map_object)
-
+        # folium.GeoJson(gdf, style_function=style).add_to(map_object)
+        folium.GeoJson(gdf[['geometry']], style_function=style).add_to(map_object)
+        
     except Exception as e:
         # Fail silently if file unreadable
         # print("Error reading boundary file:", matches[0])

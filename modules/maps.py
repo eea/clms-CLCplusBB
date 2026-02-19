@@ -225,6 +225,5 @@ def overlay_region_boundary(map_object, region_slug, vectors_dir='aoi_vectors', 
 
         import traceback
         traceback.print_exc()
-        pass
 
     return map_object

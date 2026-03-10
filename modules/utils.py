@@ -29,8 +29,19 @@ CLC_CLASS_INFO = {
     254: {"name": "Outside area", "color": "#e6e6e6"}
 }
 
-def visualize_class_pair_boundaries(class_pair_results, class_info=None, use_names=True, metric='length', figsize=(12, 10)):
-    """Visualize class pair boundary results as a confusion matrix-style heatmap.
+def visualize_class_pair_boundaries(
+    class_pair_results,
+    class_info=None,
+    use_names=True,
+    metric='length',
+    figsize=(12, 10),
+    title_length="Class Pair Boundary Lengths [km]",
+    title_density="Class Pair Edge Densities [m/ha]",
+    titles=None,
+    common_title=None
+):
+    """
+    Visualize class pair boundary results as a confusion matrix-style heatmap, with customizable titles.
 
     Accepts output from `get_boundary_length_per_class_pair` after its refactor to
     return dictionaries per pair: {"length_km": float, "edge_density_m_per_ha": float}.
@@ -52,52 +63,62 @@ def visualize_class_pair_boundaries(class_pair_results, class_info=None, use_nam
         One of 'length', 'density', or 'both'. If 'both', shows length and density side-by-side.
     figsize : tuple, default (12, 10)
         Base figure size; doubled horizontally if metric == 'both'.
+    title_length : str, optional
+        Title for the length heatmap.
+    title_density : str, optional
+        Title for the density heatmap.
+    titles : list or tuple, optional
+        If metric == 'both', provide [title_length, title_density] to override both.
+    common_title : str, optional
+        Common title displayed above the entire figure.
 
     Returns
     -------
     (Figure, Axes or list[Axes])
         Matplotlib Figure and the Axes object(s). If metric == 'both', returns list of two Axes.
     """
-    
+
     # Extract all unique classes
     all_classes = set()
     for (class_a, class_b) in class_pair_results.keys():
         all_classes.add(class_a)
         all_classes.add(class_b)
-    
     all_classes = sorted(list(all_classes))
-    
+
     # Create labels with text wrapping
     def wrap_text(text, max_chars_per_line=15):
         """Wrap text to multiple lines for better display"""
         import textwrap
         if len(text) <= max_chars_per_line:
             return text
-        # Use textwrap to break at word boundaries
-        wrapped = textwrap.fill(text, width=max_chars_per_line)
-        return wrapped
-    
+        return textwrap.fill(text, width=max_chars_per_line)
+
     if use_names and class_info is not None:
         labels = [class_info.get(class_id, {}).get('name', f' {class_id}') for class_id in all_classes]
-        # Wrap long names for better display
         labels = [wrap_text(label) for label in labels]
     else:
         labels = [str(class_id) for class_id in all_classes]
-    
-    # Determine if showing both metrics
+
     show_both = metric == 'both'
-    
     if show_both:
-        # Adjust figsize for side-by-side plots
         figsize = (figsize[0] * 2, figsize[1])
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
         axes = [ax1, ax2]
         metrics = ['length', 'density']
+        if titles is not None and len(titles) == 2:
+            plot_titles = titles
+        else:
+            plot_titles = [title_length, title_density]
     else:
         fig, ax = plt.subplots(figsize=figsize)
         axes = [ax]
         metrics = [metric]
-    
+        plot_titles = [title_length if metric == 'length' else title_density]
+
+    # Add common title if provided
+    if common_title is not None:
+        fig.suptitle(common_title, fontsize=20, fontweight='bold', y=1.02)
+
     for i, current_metric in enumerate(metrics):
         # Create matrix for current metric
         matrix = np.zeros((len(all_classes), len(all_classes)))
@@ -108,28 +129,21 @@ def visualize_class_pair_boundaries(class_pair_results, class_info=None, use_nam
                 if current_metric == 'length':
                     value = result.get('length_km', np.nan)
                 else:
-                    # Support both new key and possible legacy key naming
                     value = result.get('edge_density_m_per_ha', result.get('edge_density', np.nan))
             elif isinstance(result, tuple) and len(result) >= 2:
                 value = result[0] if current_metric == 'length' else result[1]
             else:
-                # Scalar fallback (assume length only)
                 value = result if current_metric == 'length' else np.nan
 
             idx_a = all_classes.index(class_a)
             idx_b = all_classes.index(class_b)
-
-            # Fill both symmetric positions
             matrix[idx_a, idx_b] = value
             matrix[idx_b, idx_a] = value
 
         # Create DataFrame for easier plotting
         df = pd.DataFrame(matrix, index=labels, columns=labels)
 
-        # Choose formatting precision based on metric
         fmt = '.3f'
-
-        # Create heatmap
         current_ax = axes[i] if show_both else ax
         sns.heatmap(
             df,
@@ -139,15 +153,10 @@ def visualize_class_pair_boundaries(class_pair_results, class_info=None, use_nam
             cbar_kws={'label': 'Boundary Length (km)' if current_metric == 'length' else 'Edge Density (m/ha)'},
             ax=current_ax
         )
-
-        # Set labels and title with units
-        title = "Class Pair Boundary Lengths [km]" if current_metric == 'length' else "Class Pair Edge Densities [m/ha]"
-        current_ax.set_title(title, fontsize=16, pad=20)
-
-        # Rotate labels for readability
+        current_ax.set_title(plot_titles[i], fontsize=16, pad=20)
         current_ax.tick_params(axis='x', rotation=45, labelrotation=45)
         current_ax.tick_params(axis='y', rotation=0)
-    
+
     plt.tight_layout()
     plt.show()
 
@@ -442,65 +451,63 @@ def plot_dual_histograms(rasters_dir1, rasters_dir2, chosen_region, dataset_labe
                         wrap_width=16, headroom_factor=1.25):
     """
     Plot two histograms side by side with a common percentage y-axis and shared legend.
-    
-    Parameters
-    ----------
-    rasters_dir1 : str
-        Path to the first raster directory
-    rasters_dir2 : str  
-        Path to the second raster directory
-    chosen_region : str
-        Name of the chosen region
-    dataset_label : str
-        Label for the dataset (e.g., 'CLCplusBB')
-    class_info : dict
-        Dictionary mapping class IDs to {"name": str, "color": str}
-    target_projection : str
-        Target projection for reprojection (default '4326')
-    title1 : str
-        Title for the first histogram
-    title2 : str
-        Title for the second histogram
-    figure_size : tuple
-        Figure size (width, height)
+    ...
     """
     from modules.analysis import calculate_class_areas
-    
+
     # Calculate class areas for both datasets
     area_results1 = calculate_class_areas(rasters_dir1, chosen_region, dataset_label, 
                                          target_projection, class_info)
     area_results2 = calculate_class_areas(rasters_dir2, chosen_region, dataset_label, 
                                          target_projection, class_info)
-    
+
     # Extract data for plotting
     def extract_plot_data(area_results):
         class_areas = area_results['class_areas']
         class_percentages = area_results['class_percentages']
         pixel_size_m = area_results['pixel_size_m']
         total_area_m2 = area_results['total_area_m2']
-        
+
         # Calculate pixel counts from areas
         pixel_area_m2 = pixel_size_m ** 2
         total_pixels = int(total_area_m2 / pixel_area_m2)
-        
+
         class_ids = list(class_areas.keys())
         counts = [int(area_m2 / pixel_area_m2) for area_m2 in class_areas.values()]
         percentages = list(class_percentages.values())
-        
+
         colors = [class_info[class_id]["color"] for class_id in class_ids]
         labels = [class_info[class_id]["name"] for class_id in class_ids]
-        
+
         return class_ids, counts, percentages, colors, labels, total_pixels
-    
+
     data1 = extract_plot_data(area_results1)
     data2 = extract_plot_data(area_results2)
-    
+
     # Get all unique classes from both datasets for consistent scaling
     all_classes = sorted(list(set(data1[0] + data2[0])))
-    
+
+    # Calculate max_pct for both datasets
+    max_pct1 = max(data1[2]) if data1[2] else 0
+    max_pct2 = max(data2[2]) if data2[2] else 0
+    def round_up(val, base=5):
+        return base * int(np.ceil(val / base)) if val > 0 else base
+    upper1 = round_up(max_pct1 * headroom_factor)
+    upper2 = round_up(max_pct2 * headroom_factor)
+    # Use the higher of the two
+    upper = max(upper1, upper2)
+    if upper < 5:
+        upper = 5
+    if upper > 100 and max(max_pct1, max_pct2) <= 100:
+        upper = 100
+    if upper - max(max_pct1, max_pct2) < 3:
+        upper = round_up(upper + 3)
+        if upper > 100 and max(max_pct1, max_pct2) <= 100:
+            upper = 100
+
     # Create figure with subplots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figure_size, sharey=True)
-    
+
     # Function to create histogram
     def create_histogram(ax, data, title):
         import textwrap
@@ -537,30 +544,18 @@ def plot_dual_histograms(rasters_dir1, rasters_dir2, chosen_region, dataset_labe
         ax.grid(True, axis='y', linestyle='--', linewidth=0.5, alpha=0.7)
         ax.set_axisbelow(True)
 
-        # Dynamic y-limit based on data (headroom factor)
-        max_pct = max(percentages) if percentages else 0
-        def round_up(val, base=5):
-            return base * int(np.ceil(val / base)) if val > 0 else base
-        upper = round_up(max_pct * headroom_factor)
-        if upper < 5:
-            upper = 5
-        if upper > 100 and max_pct <= 100:
-            upper = 100
-        if upper - max_pct < 3:
-            upper = round_up(upper + 3)
-            if upper > 100 and max_pct <= 100:
-                upper = 100
+        # Set y-limit to the shared upper value
         ax.set_ylim(0, upper)
 
         return bars, colors, wrapped_labels
-    
+
     # Create both histograms (now using class names on x-axis; legend removed)
     bars1, colors1, labels1 = create_histogram(ax1, data1, title1)
     bars2, colors2, labels2 = create_histogram(ax2, data2, title2)
 
     # Tight layout without legend space adjustments
     plt.tight_layout()
-    
+
     plt.show()
     plt.close()
 

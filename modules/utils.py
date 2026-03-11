@@ -38,121 +38,123 @@ def visualize_class_pair_boundaries(
     title_length="Class Pair Boundary Lengths [km]",
     title_density="Class Pair Edge Densities [m/ha]",
     titles=None,
-    common_title=None
-):
-    """
-    Visualize class pair boundary results as a confusion matrix-style heatmap, with customizable titles.
+    common_title=None):
 
-    Accepts output from `get_boundary_length_per_class_pair` after its refactor to
-    return dictionaries per pair: {"length_km": float, "edge_density_m_per_ha": float}.
-    Backward compatibility: still supports older tuple outputs (length_km, edge_density_m_per_ha)
-    and legacy scalar-only length values.
-
-    Parameters
-    ----------
-    class_pair_results : dict
-        Mapping of (class_a, class_b) -> result where result is one of:
-          - dict with keys 'length_km' and 'edge_density_m_per_ha'
-          - tuple(length_km, edge_density_m_per_ha)
-          - single numeric (interpreted as length_km only)
-    class_info : dict, optional
-        Mapping class_id -> {"name": str, "color": str} for axis labeling.
-    use_names : bool, default True
-        Use descriptive names (from class_info) instead of numeric IDs for axes.
-    metric : str, default 'length'
-        One of 'length', 'density', or 'both'. If 'both', shows length and density side-by-side.
-    figsize : tuple, default (12, 10)
-        Base figure size; doubled horizontally if metric == 'both'.
-    title_length : str, optional
-        Title for the length heatmap.
-    title_density : str, optional
-        Title for the density heatmap.
-    titles : list or tuple, optional
-        If metric == 'both', provide [title_length, title_density] to override both.
-    common_title : str, optional
-        Common title displayed above the entire figure.
-
-    Returns
-    -------
-    (Figure, Axes or list[Axes])
-        Matplotlib Figure and the Axes object(s). If metric == 'both', returns list of two Axes.
-    """
-
-    # Extract all unique classes
+    # Extract unique classes
     all_classes = set()
     for (class_a, class_b) in class_pair_results.keys():
         all_classes.add(class_a)
         all_classes.add(class_b)
+
     all_classes = sorted(list(all_classes))
 
-    # Create labels with text wrapping
+    # Text wrapping helper
     def wrap_text(text, max_chars_per_line=15):
-        """Wrap text to multiple lines for better display"""
         import textwrap
         if len(text) <= max_chars_per_line:
             return text
         return textwrap.fill(text, width=max_chars_per_line)
 
+    # Axis labels
     if use_names and class_info is not None:
-        labels = [class_info.get(class_id, {}).get('name', f' {class_id}') for class_id in all_classes]
+        labels = [
+            class_info.get(class_id, {}).get('name', f'{class_id}')
+            for class_id in all_classes
+        ]
         labels = [wrap_text(label) for label in labels]
     else:
         labels = [str(class_id) for class_id in all_classes]
 
     show_both = metric == 'both'
+
     if show_both:
         figsize = (figsize[0] * 2, figsize[1])
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
         axes = [ax1, ax2]
         metrics = ['length', 'density']
+
         if titles is not None and len(titles) == 2:
             plot_titles = titles
         else:
             plot_titles = [title_length, title_density]
+
     else:
         fig, ax = plt.subplots(figsize=figsize)
         axes = [ax]
         metrics = [metric]
         plot_titles = [title_length if metric == 'length' else title_density]
 
-    # Add common title if provided
+    # Common title
     if common_title is not None:
         fig.suptitle(common_title, fontsize=20, fontweight='bold', y=1.02)
 
     for i, current_metric in enumerate(metrics):
-        # Create matrix for current metric
-        matrix = np.zeros((len(all_classes), len(all_classes)))
 
-        # Fill matrix with boundary data using flexible result parsing
+        matrix = np.zeros((len(all_classes), len(all_classes)))
+        annotation_matrix = np.empty((len(all_classes), len(all_classes)), dtype=object)
+
         for (class_a, class_b), result in class_pair_results.items():
+
+            # Parse results
             if isinstance(result, dict):
+
                 if current_metric == 'length':
                     value = result.get('length_km', np.nan)
+                    rel = result.get('rel_length_fraction', np.nan)
+
                 else:
-                    value = result.get('edge_density_m_per_ha', result.get('edge_density', np.nan))
+                    value = result.get('edge_density_m_per_ha', np.nan)
+                    rel = result.get('rel_edge_density_fraction', np.nan)
+
             elif isinstance(result, tuple) and len(result) >= 2:
+
                 value = result[0] if current_metric == 'length' else result[1]
+                rel = np.nan
+
             else:
+
                 value = result if current_metric == 'length' else np.nan
+                rel = np.nan
 
             idx_a = all_classes.index(class_a)
             idx_b = all_classes.index(class_b)
+
             matrix[idx_a, idx_b] = value
             matrix[idx_b, idx_a] = value
 
-        # Create DataFrame for easier plotting
+            # Annotation text
+            if not np.isnan(rel):
+                annot = f"{value:.3f}\n({rel*100:.0f}%)"
+            else:
+                annot = f"{value:.3f}"
+
+            annotation_matrix[idx_a, idx_b] = annot
+            annotation_matrix[idx_b, idx_a] = annot
+
         df = pd.DataFrame(matrix, index=labels, columns=labels)
 
-        fmt = '.3f'
-        current_ax = axes[i] if show_both else ax
+        # Mask diagonal (same-class intersections)
+        mask = np.eye(len(df), dtype=bool)
+
+        current_ax = axes[i]
+
         sns.heatmap(
             df,
-            annot=True,
-            fmt=fmt,
+            annot=annotation_matrix,
+            fmt="",
             cmap='viridis',
-            cbar_kws={'label': 'Boundary Length (km)' if current_metric == 'length' else 'Edge Density (m/ha)'},
+            mask=mask,
+            cbar_kws={
+                'label': 'Boundary Length (km)'
+                if current_metric == 'length'
+                else 'Edge Density (m/ha)'
+            },
             ax=current_ax
         )
+
+        # Grey background for masked cells
+        current_ax.set_facecolor("#d9d9d9")
+
         current_ax.set_title(plot_titles[i], fontsize=16, pad=20)
         current_ax.tick_params(axis='x', rotation=45, labelrotation=45)
         current_ax.tick_params(axis='y', rotation=0)

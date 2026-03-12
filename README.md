@@ -1,6 +1,6 @@
 # Landscape Fragmentation with CLCplus Backbone
 
-Jupyter notebook for assessing landscape fragmentation using the [CLCplus Backbone 2023](https://land.copernicus.eu/en/products/clc-backbone) 10 m land cover dataset from the Copernicus Land Monitoring Service.
+Jupyter notebook exploring landscape fragmentation and land-use pressures around Polish national parks using the [Copernicus CLCplus Backbone 2023](https://land.copernicus.eu/en/products/clc-backbone) land cover dataset.
 
 ## What it does
 
